@@ -1,0 +1,37 @@
+{
+  "name": "eink-display-system",
+  "version": "1.0.0",
+  "description": "Monorepo for E-Ink display image generation and firmware",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/image-generator",
+    "build": "npm run build --workspace=packages/image-generator",
+    "generate": "npm run generate --workspace=packages/image-generator",
+    "firmware:build": "cd packages/firmware && pio run",
+    "firmware:upload": "cd packages/firmware && pio run --target upload",
+    "firmware:monitor": "cd packages/firmware && pio device monitor"
+  },
+  "keywords": [
+    "e-ink",
+    "esp32",
+    "react",
+    "image-generation",
+    "monorepo"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "bootstrap-icons": "^1.13.1",
+    "crypto-js": "^4.2.0",
+    "hmacsha1": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/crypto-js": "^4.2.2"
+  }
+}

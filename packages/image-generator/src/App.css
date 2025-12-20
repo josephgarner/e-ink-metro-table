@@ -1,0 +1,70 @@
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.app-header {
+  margin-bottom: 2rem;
+}
+
+.app-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2.5rem;
+}
+
+.app-header p {
+  color: #888;
+  margin: 0;
+}
+
+.component-selector {
+  margin: 2rem 0;
+  padding: 1rem;
+  background: #333;
+  border-radius: 8px;
+}
+
+.component-selector label {
+  margin-right: 1rem;
+  font-weight: 600;
+}
+
+.component-selector select {
+  padding: 0.5rem 1rem;
+  font-size: 1rem;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #222;
+  color: #fff;
+  cursor: pointer;
+}
+
+.component-selector select:hover {
+  border-color: #777;
+}
+
+.instructions {
+  margin-top: 3rem;
+  text-align: left;
+  padding: 1.5rem;
+  background: #2a2a2a;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.instructions h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+
+.instructions ul {
+  line-height: 1.8;
+}
+
+.instructions code {
+  background: #1a1a1a;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  color: #4fc3f7;
+}

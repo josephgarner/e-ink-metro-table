@@ -1,0 +1,42 @@
+# Node
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# PlatformIO
+.pio/
+.vscode/
+.clang_complete
+.gcc-flags.json
+
+# Build artifacts
+*.bin
+*.hex
+*.elf
+
+# Generated images
+packages/image-generator/output/
+*.png
+*.jpg
+*.bmp
+
+# Environment files
+.env
+
+# OS
+Thumbs.db
