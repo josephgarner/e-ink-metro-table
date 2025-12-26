@@ -1,4 +1,4 @@
-import { buildTTAPIURL } from './api'
+import { buildTTAPIURL } from '../../service/api'
 import { format, toZonedTime } from 'date-fns-tz'
 import { differenceInMinutes } from 'date-fns'
 

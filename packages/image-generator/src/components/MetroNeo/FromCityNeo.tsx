@@ -39,9 +39,13 @@ function wrapPromise<T>(promise: Promise<T>) {
   }
 }
 
+interface FromCityProps {
+  status: string
+}
+
 async function fetchTimes() {
   const apiURL = await buildTTAPIURL(
-    '/v3/departures/route_type/0/stop/1097?direction_id=1&max_results=3&include_cancelled=true'
+    '/v3/departures/route_type/0/stop/1097?direction_id=16&max_results=3&include_cancelled=true'
   )
   const res = await fetch(apiURL)
   const data = await res.json()
@@ -67,12 +71,20 @@ async function fetchTimes() {
 // Create the resource outside the component
 const timesResource = wrapPromise(fetchTimes())
 
-interface ToCityProps {
-  status: string
-}
-
-export function TrainsToCityNeo({ status }: ToCityProps) {
+export function TrainsFromCityNeo({ status }: FromCityProps) {
   const times = timesResource.read()
+
+  const colorMap = {
+    good: '#00FF00',
+    minor: '#FFFF00',
+    major: '#FF0000',
+    cancel: '#353E43',
+  }
+
+  const getStatusColor = (disruptions: string[]) => {
+    if (disruptions.length === 0) return colorMap.good
+    return colorMap.minor
+  }
 
   return (
     <VStack w="100%" alignItems="stretch">
@@ -113,7 +125,7 @@ export function TrainsToCityNeo({ status }: ToCityProps) {
 
             {/* Status badge */}
             <Box
-              bg={'brutal.cyan'}
+              bg={getStatusColor(time.disruption_ids)}
               color="brutal.black"
               display="flex"
               p={2}

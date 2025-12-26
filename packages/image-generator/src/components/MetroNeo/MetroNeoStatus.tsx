@@ -1,9 +1,53 @@
 import { Suspense } from 'react'
-import { Box, HStack, VStack, Text } from '@chakra-ui/react'
+import { Box, HStack, VStack, Text, Icon } from '@chakra-ui/react'
+import { FaLongArrowAltRight, FaLongArrowAltLeft } from 'react-icons/fa'
 import { TrainsToCityNeo } from './ToCityNeo'
 import ErrorBoundary from '../ErrorBoundary'
+import { TrainsFromCityNeo } from './FromCityNeo'
+import { buildTTAPIURL } from '@/service/api'
+
+async function fetchStatus() {
+  const apiURL = await buildTTAPIURL('/v3/routes/16')
+  const res = await fetch(apiURL)
+  const data = await res.json()
+  return {
+    status: data.route.route_service_status.description,
+  }
+}
+
+function wrapPromise<T>(promise: Promise<T>) {
+  let status = 'pending'
+  let result: T
+  let suspender = promise.then(
+    (r) => {
+      status = 'success'
+      result = r
+    },
+    (e) => {
+      status = 'error'
+      result = e
+    }
+  )
+
+  return {
+    read() {
+      if (status === 'pending') {
+        throw suspender
+      } else if (status === 'error') {
+        throw result
+      } else if (status === 'success') {
+        return result
+      }
+    },
+  }
+}
+
+// Create the resource outside the component
+const statusResource = wrapPromise(fetchStatus())
 
 function MetroNeoStatus() {
+  const status = statusResource.read()
+
   return (
     <Box
       w="100%"
@@ -13,7 +57,7 @@ function MetroNeoStatus() {
       fontFamily="'Inter', -apple-system, system-ui, sans-serif"
       fontWeight="bold"
     >
-      <VStack gap={4} align="stretch" h="100%">
+      <VStack gap={4} align="stretch" h="100%" w="100%">
         {/* Route Header: Home -> Flinders */}
         <HStack gap={4} justify="center" align="center">
           <Box
@@ -30,18 +74,9 @@ function MetroNeoStatus() {
             </Text>
           </Box>
 
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="40"
-            height="40"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-          >
-            <path
-              fillRule="evenodd"
-              d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8"
-            />
-          </svg>
+          <Icon size="2xl" color="black">
+            <FaLongArrowAltRight />
+          </Icon>
 
           <Box
             bg="brutal.yellow"
@@ -59,7 +94,7 @@ function MetroNeoStatus() {
         </HStack>
 
         {/* Train Times Row */}
-        <HStack gap={4} flex="1" align="stretch">
+        <HStack gap={4} flex="1" w="100%">
           <ErrorBoundary>
             <Suspense
               fallback={
@@ -80,7 +115,7 @@ function MetroNeoStatus() {
                 </Box>
               }
             >
-              <TrainsToCityNeo />
+              <TrainsToCityNeo status={status?.status} />
             </Suspense>
           </ErrorBoundary>
         </HStack>
@@ -101,19 +136,9 @@ function MetroNeoStatus() {
             </Text>
           </Box>
 
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="40"
-            height="40"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-          >
-            <path
-              fillRule="evenodd"
-              d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8"
-            />
-          </svg>
-
+          <Icon size="2xl" color="black">
+            <FaLongArrowAltLeft />
+          </Icon>
           <Box
             bg="brutal.black"
             color="brutal.white"
@@ -127,6 +152,31 @@ function MetroNeoStatus() {
               Flinders
             </Text>
           </Box>
+        </HStack>
+        <HStack gap={4} flex="1">
+          <ErrorBoundary>
+            <Suspense
+              fallback={
+                <Box
+                  border="4px solid black"
+                  borderRadius="0"
+                  boxShadow="5px 5px 0px 0px rgba(0, 0, 0, 1)"
+                  p={8}
+                  bg="brutal.yellow"
+                  flex="1"
+                  display="flex"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Text fontSize="lg" fontWeight="black" textTransform="uppercase">
+                    Loading trains...
+                  </Text>
+                </Box>
+              }
+            >
+              <TrainsFromCityNeo status={status?.status} />
+            </Suspense>
+          </ErrorBoundary>
         </HStack>
       </VStack>
     </Box>

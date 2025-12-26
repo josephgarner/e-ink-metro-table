@@ -1,5 +1,4 @@
 import { ReactNode } from 'react'
-import './DisplayPreview.css'
 import { AspectRatio } from '@chakra-ui/react'
 
 interface DisplayPreviewProps {
