@@ -1,6 +1,8 @@
 import { launch } from 'puppeteer';
 import * as path from 'path';
 import * as fs from 'fs';
+import sharp from 'sharp';
+import * as bmp from 'bmp-js';
 import { config } from '../config';
 
 export class ImageGeneratorService {
@@ -86,18 +88,51 @@ export class ImageGeneratorService {
       // Additional wait for Suspense boundaries to resolve
       await new Promise((resolve) => setTimeout(resolve, 3000));
 
-      // Take screenshot of just the display content
+      // Take screenshot of just the display content as PNG (temp file)
+      const tempPngPath = this.outputPath.replace(/\.(bmp|png)$/i, '.temp.png');
       await displayElement.screenshot({
-        path: this.outputPath,
+        path: tempPngPath,
         omitBackground: false,
       });
 
-      console.log(`✓ Image generated successfully: ${this.outputPath}`);
-      console.log(`  Size: ${this.displayWidth}x${this.displayHeight}px`);
+      console.log(`✓ Screenshot captured: ${tempPngPath}`);
+
+      // Convert PNG to BMP for E-Ink display compatibility
+      console.log('Converting PNG to BMP format for E-Ink display...');
+
+      // Use sharp to get raw pixel data
+      const { data, info } = await sharp(tempPngPath)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      console.log(`Image info: ${info.width}x${info.height}, channels: ${info.channels}`);
+
+      // Create BMP data structure
+      const bmpData = {
+        width: info.width,
+        height: info.height,
+        data: data,
+      };
+
+      // Encode as BMP
+      const rawBmpData = bmp.encode(bmpData);
+
+      // Write BMP file
+      fs.writeFileSync(this.outputPath, rawBmpData.data);
+
+      console.log(`✓ Image converted to BMP: ${this.outputPath}`);
+      console.log(`  Size: ${info.width}x${info.height}px`);
 
       // Get file size
       const stats = fs.statSync(this.outputPath);
       console.log(`  File size: ${(stats.size / 1024).toFixed(2)} KB`);
+
+      // Clean up temp PNG file
+      if (fs.existsSync(tempPngPath)) {
+        fs.unlinkSync(tempPngPath);
+        console.log('✓ Temp PNG file cleaned up');
+      }
 
       // Upload to file store if configured
       if (this.fileStoreUrl) {
@@ -146,11 +181,14 @@ export class ImageGeneratorService {
 
         console.log(`Uploading to: ${uploadUrl}`);
 
+        // Determine content type based on file extension
+        const contentType = filename.toLowerCase().endsWith('.bmp') ? 'image/bmp' : 'image/png';
+
         const response = await fetch(uploadUrl, {
           method: 'PUT',
           body: fileBuffer,
           headers: {
-            'Content-Type': 'image/png',
+            'Content-Type': contentType,
             'Content-Length': fileBuffer.length.toString(),
           },
         });

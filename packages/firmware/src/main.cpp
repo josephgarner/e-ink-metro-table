@@ -5,6 +5,7 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <time.h>
+#include <esp_task_wdt.h>
 
 #include "config.h"
 
@@ -319,11 +320,14 @@ void downloadImage(const char* imageUrl) {
 void initDisplay() {
     Serial.println("\n--- Initializing Display ---");
 
-    display.init(115200, true, 2, false);  // Init with fast mode, reset, and no partial update
-    display.setRotation(0);                // Portrait mode
+    // Init display with serial diagnostics enabled
+    // Parameters: serial_diag_bitrate, initial (do reset), reset_duration (ms), pulldown_rst_mode
+    display.init(115200, true, 20, false);
+    display.setRotation(0);  // Portrait mode
     display.setFullWindow();
 
     Serial.println("Display initialized successfully");
+    Serial.println("NOTE: 6-color E-Ink display");
 }
 
 /**
@@ -337,42 +341,72 @@ void updateDisplay() {
         return;
     }
 
-    // Clear the display buffer
-    display.firstPage();
+    // Check image format
+    bool isPNG = (imageBufferSize > 8 && imageBuffer[0] == 0x89 && imageBuffer[1] == 'P' &&
+                  imageBuffer[2] == 'N' && imageBuffer[3] == 'G');
+    bool isBMP = (imageBufferSize > 54 && imageBuffer[0] == 'B' && imageBuffer[1] == 'M');
 
-    do {
-        display.fillScreen(GxEPD_WHITE);
+    if (isPNG) {
+        Serial.println("Detected PNG image format");
+        Serial.println("ERROR: PNG format not supported for 7-color display");
+        Serial.println("Please configure the server to generate BMP images");
+        Serial.println("Update IMAGE_OUTPUT_PATH to use .bmp extension");
 
-        // Check if we have a valid BMP image
-        // BMP files start with 'BM' signature
-        if (imageBufferSize > 54 && imageBuffer[0] == 'B' && imageBuffer[1] == 'M') {
-            Serial.println("Detected BMP image format");
-
-            // Draw BMP image
-            // Note: This is a simplified version - you may need to handle different BMP formats
-            display.drawInvertedBitmap(0, 0, imageBuffer, DISPLAY_WIDTH, DISPLAY_HEIGHT, GxEPD_BLACK);
-        }
-        // Check for PNG format
-        else if (imageBufferSize > 8 && imageBuffer[0] == 0x89 && imageBuffer[1] == 'P' &&
-                 imageBuffer[2] == 'N' && imageBuffer[3] == 'G') {
-            Serial.println("Detected PNG image format");
-            Serial.println("WARNING: PNG decoding not implemented - displaying placeholder");
-
-            // PNG requires decoding library - for now show error message
+        // Display error message
+        display.setFullWindow();
+        display.firstPage();
+        do {
+            display.fillScreen(GxEPD_WHITE);
             display.setFont(&FreeMonoBold9pt7b);
             display.setTextColor(GxEPD_BLACK);
-            display.setCursor(50, 240);
-            display.print("PNG format not supported");
+            display.setCursor(50, 200);
+            display.print("ERROR: PNG not supported");
+            display.setCursor(50, 230);
+            display.print("Server must generate BMP");
             display.setCursor(50, 260);
-            display.print("Use BMP format instead");
-        } else {
-            Serial.println("Unknown image format");
-            display.setFont(&FreeMonoBold9pt7b);
-            display.setTextColor(GxEPD_BLACK);
-            display.setCursor(50, 240);
-            display.print("Unsupported image format");
+            display.print("Check image-generator config");
+        } while (display.nextPage());
+
+        display.hibernate();
+
+        // Free image buffer
+        if (imageBuffer != nullptr) {
+            free(imageBuffer);
+            imageBuffer = nullptr;
+            imageBufferSize = 0;
         }
-    } while (display.nextPage());
+        return;
+    }
+
+    if (!isBMP) {
+        Serial.println("ERROR: Unknown image format");
+        Serial.println("Expected BMP format for 7-color display");
+
+        // Free image buffer
+        if (imageBuffer != nullptr) {
+            free(imageBuffer);
+            imageBuffer = nullptr;
+            imageBufferSize = 0;
+        }
+        return;
+    }
+
+    Serial.println("Detected BMP image format - proceeding with display update");
+    Serial.println("NOTE: Using fast refresh mode (~30 seconds)");
+    Serial.println("Device will appear unresponsive during refresh - this is normal");
+
+    Serial.println("Starting display refresh...");
+    unsigned long startTime = millis();
+
+    // Use writeImage for native BMP support on 7-color display
+    // This method handles the image decoding internally
+    display.setFullWindow();
+    display.writeImage(imageBuffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, false, false, true);
+
+    unsigned long endTime = millis();
+    Serial.print("Display refresh completed in ");
+    Serial.print((endTime - startTime) / 1000);
+    Serial.println(" seconds");
 
     // Put display to sleep to save power
     display.hibernate();

@@ -13,9 +13,9 @@
 // Service API endpoint to trigger image generation
 #define SERVICE_API_URL "http://192.168.1.100:3001/generate-image"
 
-// Image URLs
-#define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.png"
-#define SCREENSAVER_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/screensaver/display.png"
+// Image URLs (must be BMP format for 7-color E-Ink display)
+#define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.bmp"
+#define SCREENSAVER_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/screensaver/display.bmp"
 
 // ========================================
 // Display Configuration

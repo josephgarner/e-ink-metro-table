@@ -16,6 +16,7 @@ PlatformIO firmware for the XIAO ESP32-S3 Plus that downloads images from a netw
 - **Colors**: 6 colors (Black, White, Red, Yellow, Blue, Green)
 - **Interface**: SPI
 - **Aspect Ratio**: 5:3
+- **Refresh Mode**: Fast (~30 seconds)
 
 ## Features
 

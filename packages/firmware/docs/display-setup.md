@@ -3,9 +3,9 @@
 ## Hardware
 
 **Display**: 7.3" E-Ink Spectra 6 (E6) Full Color Display
-- Model: ACeP 730 (7-color display)
+- Model: ACeP 730 (6-color display)
 - Resolution: 800 x 480 pixels
-- Colors: 7 colors (Black, White, Red, Yellow, Blue, Green, Orange)
+- Colors: 6 colors (Black, White, Red, Yellow, Blue, Green)
 - Interface: SPI
 
 **Board**: XIAO ePaper Display Board EE04
@@ -71,14 +71,13 @@ For best results:
 
 ### Color Mapping
 
-The E-Ink Spectra 6 supports 7 colors. The display will approximate your image colors to:
+The E-Ink Spectra 6 supports 6 colors. The display will approximate your image colors to:
 - Black (#000000)
 - White (#FFFFFF)
 - Red (#FF0000)
 - Yellow (#FFFF00)
 - Blue (#0000FF)
 - Green (#00FF00)
-- Orange (#FF8000)
 
 **Tip**: Pre-process your images to use only these exact colors for best results.
 
@@ -91,7 +90,7 @@ The E-Ink Spectra 6 supports 7 colors. The display will approximate your image c
 convert input.png -resize 800x480! output.png
 
 # Convert to BMP with limited colors
-convert input.png -resize 800x480! -colors 7 -type Palette output.bmp
+convert input.png -resize 800x480! -colors 6 -type Palette output.bmp
 
 # Optimize with specific palette
 convert input.png -resize 800x480! \
@@ -104,7 +103,7 @@ convert input.png -resize 800x480! \
 
 1. Open your image in GIMP
 2. **Image → Scale Image** → Set to 800 x 480 pixels
-3. **Image → Mode → Indexed** → Use 7 colors
+3. **Image → Mode → Indexed** → Use 6 colors
 4. **File → Export As** → Choose BMP format
 5. In BMP options: Select "24-bit" or "8-bit"
 
@@ -117,8 +116,8 @@ from PIL import Image
 img = Image.open('input.png')
 img = img.resize((800, 480), Image.Resampling.LANCZOS)
 
-# Reduce to 7 colors
-img = img.convert('P', palette=Image.ADAPTIVE, colors=7)
+# Reduce to 6 colors
+img = img.convert('P', palette=Image.ADAPTIVE, colors=6)
 
 # Save as BMP
 img.save('output.bmp', 'BMP')
@@ -137,7 +136,17 @@ img.save('output.bmp', 'BMP')
 
 ### Refresh Time
 
-The 7.3" Spectra 6 display takes approximately **15-30 seconds** for a full refresh due to the 7-color ACeP technology. This is normal and necessary for proper color rendering.
+The firmware is configured for **fast refresh mode** (~30 seconds). For best color quality, the display can do a full refresh (50 minutes), but this is disabled by default for practical use.
+
+**Fast Refresh Mode** (current):
+- Refresh time: ~30 seconds
+- Color quality: Good (optimized for speed)
+- Best for: Regular updates, transit data
+
+**Full Quality Mode** (optional):
+- Refresh time: ~50 minutes
+- Color quality: Excellent (full ACeP color accuracy)
+- Best for: Static images, artwork
 
 **Note**: During refresh, you'll see the display cycle through different colors. This is part of the E-Ink refresh process.
 
@@ -171,7 +180,7 @@ The display consumes **zero power** when showing a static image (no refresh need
 
 1. Use exact hex colors for E-Ink palette
 2. Convert image to indexed color mode
-3. Reduce to 7 colors maximum
+3. Reduce to 6 colors maximum
 4. Avoid gradients and transparency
 
 ### Slow Refresh

@@ -23,7 +23,7 @@ export const config = {
   },
   imageGenerator: {
     appUrl: process.env.IMAGE_GENERATOR_APP_URL || 'http://localhost:3000',
-    outputPath: process.env.IMAGE_OUTPUT_PATH || './output/display.png',
+    outputPath: process.env.IMAGE_OUTPUT_PATH || './output/display.bmp',
     fileStoreUrl: process.env.FILE_STORE_URL || '',
     displayWidth: parseInt(process.env.DISPLAY_WIDTH || '800'),
     displayHeight: parseInt(process.env.DISPLAY_HEIGHT || '480'),
