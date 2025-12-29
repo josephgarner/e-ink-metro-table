@@ -75,18 +75,6 @@ const timesResource = wrapPromise(fetchTimes())
 export function TrainsFromCityNeo({ status }: FromCityProps) {
   const times = timesResource.read()
 
-  const colorMap = {
-    good: '#00FF00',
-    minor: '#FFFF00',
-    major: '#FF0000',
-    cancel: '#353E43',
-  }
-
-  const getStatusColor = (disruptions: string[]) => {
-    if (disruptions.length === 0) return colorMap.good
-    return colorMap.minor
-  }
-
   return (
     <VStack w="100%" alignItems="stretch">
       {times.map((time: Departures, idx: number) => (
