@@ -20,8 +20,14 @@ PlatformIO firmware for the XIAO ESP32-S3 Plus that downloads images from a netw
 ## Features
 
 - WiFi connectivity for image downloads
-- Deep sleep mode for low power consumption
-- Automatic wake-up and refresh on timer
+- NTP time synchronization
+- Time-based content switching (metro data vs screensaver)
+- **Dual manual button controls:**
+  - **Key 1**: Force metro data update
+  - **Key 2**: Display screensaver
+- API integration to trigger image generation
+- Deep sleep mode with variable duration for low power consumption
+- Automatic wake-up and refresh on timer (or button press)
 - HTTP/HTTPS image download support
 - Error handling and retry logic
 
@@ -39,16 +45,23 @@ PlatformIO firmware for the XIAO ESP32-S3 Plus that downloads images from a netw
 
 1. Connect the XIAO ESP32-S3 to your computer via USB-C
 
-2. Configure WiFi and server settings in `src/config.h`:
+2. Configure WiFi, server, and time settings in `src/config.h`:
 
 ```cpp
 #define WIFI_SSID "your-wifi-ssid"
 #define WIFI_PASSWORD "your-wifi-password"
-#define IMAGE_SERVER_URL "http://192.168.1.100/display.png"
+#define SERVICE_API_URL "http://192.168.1.100:3001/generate-image"
+#define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.png"
+#define SCREENSAVER_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/screensaver/display.png"
+
+// Timezone (UTC+10 for Melbourne)
+#define GMT_OFFSET_SEC 36000
+#define DAYLIGHT_OFFSET_SEC 3600
 ```
 
 3. Adjust other settings as needed:
-   - `SLEEP_DURATION_SECONDS`: How often to update (in seconds)
+   - Active time periods (morning/evening hours)
+   - Sleep durations (15 min / 3.5 hours)
    - Pin configurations (if using custom wiring)
 
 ## Building and Uploading
@@ -101,31 +114,80 @@ Edit `src/config.h`:
 #define WIFI_PASSWORD "your-wifi-password"
 ```
 
-### Image Server URL
+### Service API and Image URLs
 
-Set the URL where your image is hosted:
-
-```cpp
-// Local network server
-#define IMAGE_SERVER_URL "http://192.168.1.100:8080/display.png"
-
-// Or network share
-#define IMAGE_SERVER_URL "http://192.168.1.100/shared/eink/display.png"
-```
-
-### Update Frequency
-
-Adjust how often the display updates (in seconds):
+Configure the service API endpoint and image storage URLs:
 
 ```cpp
-#define SLEEP_DURATION_SECONDS 300  // 5 minutes
+// Service API to trigger image generation
+#define SERVICE_API_URL "http://192.168.1.100:3001/generate-image"
+
+// Metro table image URL
+#define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.png"
+
+// Screensaver image URL
+#define SCREENSAVER_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/screensaver/display.png"
 ```
 
-Common values:
-- 300 = 5 minutes
-- 900 = 15 minutes
-- 1800 = 30 minutes
-- 3600 = 1 hour
+### Active Time Periods
+
+Configure when to show metro data vs screensaver:
+
+```cpp
+// Morning period: 5:00 AM - 8:00 AM
+#define MORNING_START_HOUR 5
+#define MORNING_END_HOUR 8
+
+// Evening period: 3:00 PM - 7:00 PM
+#define EVENING_START_HOUR 15
+#define EVENING_END_HOUR 19
+```
+
+### Sleep Durations
+
+Adjust sleep durations for active and inactive periods:
+
+```cpp
+#define ACTIVE_PERIOD_SLEEP_SECONDS 900      // 15 minutes
+#define INACTIVE_PERIOD_SLEEP_SECONDS 12600  // 3.5 hours
+```
+
+### Timezone Configuration
+
+Set your local timezone:
+
+```cpp
+#define NTP_SERVER "pool.ntp.org"
+#define GMT_OFFSET_SEC 36000      // UTC+10 for Melbourne
+#define DAYLIGHT_OFFSET_SEC 3600  // DST offset
+```
+
+Common timezones:
+- UTC+10 (Melbourne/Sydney): 36000
+- UTC+8 (Perth): 28800
+- UTC-5 (Eastern US): -18000
+- UTC+0 (London): 0
+
+### Button Wake-up Configuration
+
+Configure buttons for manual control:
+
+```cpp
+#define METRO_BUTTON_PIN 1          // Key 1: Force metro data update
+#define SCREENSAVER_BUTTON_PIN 2    // Key 2: Display screensaver
+#define BUTTON_ACTIVE_LOW true      // true if buttons connect to GND when pressed
+```
+
+**Key 1 (Metro Button)** - When pressed during sleep:
+- Device wakes immediately
+- Fetches fresh metro data (ignoring time-based rules)
+- Updates display
+- Returns to sleep for 15 minutes
+
+**Key 2 (Screensaver Button)** - When pressed during sleep:
+- Device wakes immediately
+- Downloads and displays screensaver
+- Returns to sleep for 3.5 hours
 
 ### Pin Configuration
 
@@ -142,11 +204,37 @@ The default pin configuration for XIAO ePaper Display Board EE04:
 
 ## Operation Flow
 
-1. **Wake Up**: Device wakes from deep sleep
-2. **WiFi Connect**: Connects to configured WiFi network
-3. **Download Image**: Downloads image from server via HTTP
-4. **Update Display**: Renders image to E-Ink display
-5. **Sleep**: Enters deep sleep until next update cycle
+1. **Wake Up**: Device wakes from deep sleep (timer or button press)
+2. **Check Wake Source**: Determines if woken by timer, Key 1, or Key 2
+3. **WiFi Connect**: Connects to configured WiFi network
+4. **Time Sync**: Synchronizes time with NTP server
+5. **Determine Action**:
+
+**If Key 1 (Metro Button) Pressed:**
+6. **Trigger Generation**: Calls service API to generate fresh metro image
+7. **Download Metro Image**: Downloads latest metro table image
+8. **Update Display**: Renders metro image to E-Ink display
+9. **Sleep 15 min**: Enters deep sleep for 15 minutes
+   - Wake sources: Timer OR Key 1 OR Key 2
+
+**If Key 2 (Screensaver Button) Pressed:**
+6. **Download Screensaver**: Downloads screensaver image
+7. **Update Display**: Renders screensaver to E-Ink display
+8. **Sleep 3.5 hours**: Enters deep sleep for 3.5 hours
+   - Wake sources: Timer OR Key 1 OR Key 2
+
+**If Timer Wake (Active Period 5-8am or 3-7pm):**
+6. **Trigger Generation**: Calls service API to generate fresh metro image
+7. **Download Metro Image**: Downloads latest metro table image
+8. **Update Display**: Renders metro image to E-Ink display
+9. **Sleep 15 min**: Enters deep sleep for 15 minutes
+   - Wake sources: Timer OR Key 1 OR Key 2
+
+**If Timer Wake (Inactive Period):**
+6. **Download Screensaver**: Downloads screensaver image
+7. **Update Display**: Renders screensaver to E-Ink display
+8. **Sleep 3.5 hours**: Enters deep sleep for 3.5 hours
+   - Wake sources: Timer OR Key 1 OR Key 2
 
 ## Serial Monitor Output
 

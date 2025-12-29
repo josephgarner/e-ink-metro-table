@@ -4,17 +4,18 @@
 // ========================================
 // WiFi Configuration
 // ========================================
-#define WIFI_SSID "your-wifi-ssid"
-#define WIFI_PASSWORD "your-wifi-password"
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 
 // ========================================
 // Server Configuration
 // ========================================
-// URL to download the image from
-// Examples:
-// - Local network: "http://192.168.1.100:8080/display.png"
-// - Network share: "http://192.168.1.100/shared/eink/display.png"
-#define IMAGE_SERVER_URL "http://192.168.1.100/display.png"
+// Service API endpoint to trigger image generation
+#define SERVICE_API_URL "http://192.168.1.100:3001/generate-image"
+
+// Image URLs
+#define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.png"
+#define SCREENSAVER_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/screensaver/display.png"
 
 // ========================================
 // Display Configuration
@@ -34,26 +35,48 @@
 // ========================================
 // Power Management
 // ========================================
-// Deep sleep duration in seconds
-// Adjust based on how often you want the display to update
-// Examples:
-// - 300 = 5 minutes
-// - 900 = 15 minutes
-// - 1800 = 30 minutes
-// - 3600 = 1 hour
-#define SLEEP_DURATION_SECONDS 300
+// Deep sleep durations in seconds
+#define ACTIVE_PERIOD_SLEEP_SECONDS 900      // 15 minutes during active periods
+#define INACTIVE_PERIOD_SLEEP_SECONDS 12600  // 3.5 hours during inactive periods
 
 // ========================================
-// SPI Configuration (XIAO ESP32-S3)
+// Time Configuration
 // ========================================
-// These pins are for the XIAO ePaper Display Board EE04
-// Adjust if using custom wiring
-#define EPD_BUSY_PIN 38  // Busy signal from display
-#define EPD_RST_PIN 39   // Reset pin
-#define EPD_DC_PIN 40    // Data/Command selection
-#define EPD_CS_PIN 41    // Chip select
-#define EPD_SCK_PIN 42   // SPI Clock
-#define EPD_MOSI_PIN 43  // SPI MOSI
+// NTP Server for time synchronization
+#define NTP_SERVER "pool.ntp.org"
+#define GMT_OFFSET_SEC 36000      // UTC+10 (adjust for your timezone)
+#define DAYLIGHT_OFFSET_SEC 3600  // DST offset (adjust as needed)
+
+// Active time periods (24-hour format)
+// Morning period: 5:00 AM - 8:00 AM
+#define MORNING_START_HOUR 5
+#define MORNING_END_HOUR 8
+
+// Evening period: 3:00 PM - 7:00 PM
+#define EVENING_START_HOUR 15
+#define EVENING_END_HOUR 19
+
+// ========================================
+// SPI Configuration (XIAO ePaper Display Board EE04)
+// ========================================
+// Pin configuration for XIAO ePaper Display Board EE04 with XIAO ESP32-S3 Plus
+// These are the default pins for the EE04 board - do not change unless using custom wiring
+#define EPD_BUSY_PIN 39  // Busy signal from display (D6)
+#define EPD_RST_PIN 40   // Reset pin (D7)
+#define EPD_DC_PIN 38    // Data/Command selection (D5)
+#define EPD_CS_PIN 41    // Chip select (D8)
+// SPI pins are hardware-defined on ESP32-S3:
+// EPD_SCK_PIN  -> GPIO7 (SPI SCK)
+// EPD_MOSI_PIN -> GPIO9 (SPI MOSI)
+
+// ========================================
+// Button Configuration
+// ========================================
+// Buttons for manual wake and control
+// XIAO ePaper Display Board has multiple buttons
+#define METRO_BUTTON_PIN 1        // Key 1: Force metro data update
+#define SCREENSAVER_BUTTON_PIN 2  // Key 2: Display screensaver
+#define BUTTON_ACTIVE_LOW true    // Set to true if buttons connect to GND when pressed
 
 // ========================================
 // Debug Configuration
@@ -64,7 +87,7 @@
 // ========================================
 // HTTP Configuration
 // ========================================
-#define HTTP_TIMEOUT 10000  // HTTP timeout in milliseconds
+#define HTTP_TIMEOUT 10000              // HTTP timeout in milliseconds
 #define MAX_IMAGE_SIZE (800 * 480 * 3)  // Maximum expected image size in bytes
 
-#endif // CONFIG_H
+#endif  // CONFIG_H
