@@ -45,7 +45,7 @@ Required environment variables:
 - `FILE_STORE_URL` - File store location to upload images to (optional). Supports:
   - Network paths: `//192.168.1.100/shared/eink`
   - Local paths: `C:/shared/eink`
-  - HTTP endpoints: `https://storage.example.com/upload`
+  - HTTP endpoints: `http://127.0.0.1:5000/new-path` (uses PUT request, filename appended automatically)
 - `DISPLAY_WIDTH` - Display width in pixels (default: 800)
 - `DISPLAY_HEIGHT` - Display height in pixels (default: 480)
 - `COMPONENT` - Component to render (default: metro)

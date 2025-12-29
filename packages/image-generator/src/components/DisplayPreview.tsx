@@ -15,7 +15,7 @@ function DisplayPreview({ size, children }: DisplayPreviewProps) {
   const height = size === 'sm' ? 800 : 1040
   const width = size === 'sm' ? 480 : 624
   return (
-    <AspectRatio ratio={3 / 5} height={height} width={width}>
+    <AspectRatio ratio={3 / 5} height={height} width={width} id="display-content">
       {children}
     </AspectRatio>
   )

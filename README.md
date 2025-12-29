@@ -160,7 +160,10 @@ DB_USER=postgres
 DB_PASSWORD=your_password
 
 # Optional: Upload images to file store
+# Network path example:
 FILE_STORE_URL=//192.168.1.100/shared/eink
+# HTTP endpoint example (uses PUT):
+FILE_STORE_URL=http://127.0.0.1:5000/new-path
 ```
 
 ### Image Generator

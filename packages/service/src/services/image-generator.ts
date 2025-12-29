@@ -9,7 +9,6 @@ export class ImageGeneratorService {
   private fileStoreUrl: string;
   private displayWidth: number;
   private displayHeight: number;
-  private component: string;
 
   constructor() {
     this.appUrl = config.imageGenerator.appUrl;
@@ -17,12 +16,10 @@ export class ImageGeneratorService {
     this.fileStoreUrl = config.imageGenerator.fileStoreUrl;
     this.displayWidth = config.imageGenerator.displayWidth;
     this.displayHeight = config.imageGenerator.displayHeight;
-    this.component = config.imageGenerator.component;
   }
 
   async triggerImageGeneration(): Promise<void> {
     console.log('Starting image generation...');
-    console.log(`Component: ${this.component}`);
     console.log(`Output dimensions: ${this.displayWidth}x${this.displayHeight}`);
     console.log(`Output path: ${this.outputPath}`);
 
@@ -69,17 +66,17 @@ export class ImageGeneratorService {
 
       console.log('Page loaded, checking for elements...');
 
-      // Wait for the display content to be present first
-      const displayExists = await page.$('#display-content');
-      if (!displayExists) {
-        const pageContent = await page.content();
-        console.error('Could not find #display-content. Page content length:', pageContent.length);
-        throw new Error('Could not find #display-content element on initial load');
+      // Wait for the display content to be present
+      console.log('Waiting for #display-content element...');
+      const displayElement = await page.waitForSelector('#display-content', {
+        timeout: 10000,
+      });
+
+      if (!displayElement) {
+        throw new Error('Could not find #display-content element');
       }
 
-      // Select the component from the dropdown
-      await page.select('#component-select', this.component);
-      console.log(`Selected component: ${this.component}`);
+      console.log('Display content found, waiting for content to load...');
 
       // Wait for component to render and any async data to load
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {
@@ -88,13 +85,6 @@ export class ImageGeneratorService {
 
       // Additional wait for Suspense boundaries to resolve
       await new Promise((resolve) => setTimeout(resolve, 3000));
-
-      // Find the display content element
-      const displayElement = await page.$('#display-content');
-
-      if (!displayElement) {
-        throw new Error('Could not find #display-content element');
-      }
 
       // Take screenshot of just the display content
       await displayElement.screenshot({
@@ -144,23 +134,33 @@ export class ImageGeneratorService {
         fs.copyFileSync(this.outputPath, destinationPath);
         console.log(`✓ Image uploaded to: ${destinationPath}`);
       }
-      // If it's an HTTP URL, upload via POST
+      // If it's an HTTP URL, upload via PUT
       else if (this.fileStoreUrl.startsWith('http://') || this.fileStoreUrl.startsWith('https://')) {
         const fileBuffer = fs.readFileSync(this.outputPath);
-        const formData = new FormData();
-        const blob = new Blob([fileBuffer], { type: 'image/png' });
-        formData.append('file', blob, filename);
 
-        const response = await fetch(this.fileStoreUrl, {
-          method: 'POST',
-          body: formData,
+        // Construct the full URL with the filename
+        // e.g., http://127.0.0.1:5000/new-path/display.png
+        const uploadUrl = this.fileStoreUrl.endsWith('/')
+          ? `${this.fileStoreUrl}${filename}`
+          : `${this.fileStoreUrl}/${filename}`;
+
+        console.log(`Uploading to: ${uploadUrl}`);
+
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: fileBuffer,
+          headers: {
+            'Content-Type': 'image/png',
+            'Content-Length': fileBuffer.length.toString(),
+          },
         });
 
         if (!response.ok) {
-          throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+          const errorText = await response.text().catch(() => 'No error details');
+          throw new Error(`Upload failed: ${response.status} ${response.statusText} - ${errorText}`);
         }
 
-        console.log(`✓ Image uploaded to: ${this.fileStoreUrl}`);
+        console.log(`✓ Image uploaded to: ${uploadUrl}`);
       } else {
         console.warn(`Unsupported file store URL format: ${this.fileStoreUrl}`);
       }
