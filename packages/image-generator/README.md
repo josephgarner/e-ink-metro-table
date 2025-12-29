@@ -25,18 +25,26 @@ npm install
 
 ## Configuration
 
+This React app needs access to the PTV API and database to display transit data.
+
 1. Copy the example environment file:
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env` to configure your settings:
+2. Edit `.env` with your PTV API credentials and database settings:
 ```env
-DISPLAY_WIDTH=800
-DISPLAY_HEIGHT=480
-FILE_STORE_PATH=//192.168.1.100/shared/eink  # Your network path
-OUTPUT_FILENAME=display.png
+PTV_API_BASE_URL=https://timetableapi.ptv.vic.gov.au
+PTV_DEV_ID=your_dev_id
+PTV_API_KEY=your_api_key
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=eink
+DB_USER=postgres
+DB_PASSWORD=your_password
 ```
+
+**Note**: Image generation settings (output path, dimensions, component selection) are configured in the **service** package, not here.
 
 ## Usage
 
@@ -61,19 +69,24 @@ Build the optimized production version:
 npm run build
 ```
 
-### Generating Images
+### Using the Image Generator
 
-To generate a PNG image from your current display component:
+This package is just the React app that displays the transit data. To generate images from this app, use the **service** package which uses Puppeteer to screenshot this React app.
 
-1. Make sure the dev server is running (`npm run dev`)
-2. In another terminal, run:
+Run the development server:
+
 ```bash
-npm run generate
+npm run dev
 ```
 
-The image will be saved to the configured `FILE_STORE_PATH`.
+The app will be available at `http://localhost:3000`.
 
-**Note**: The generate script requires the dev server to be running, or you can set `APP_URL` in your `.env` to point to your built/deployed version.
+To trigger image generation, use the service package's API:
+
+```bash
+# From the service package
+curl -X POST http://localhost:3001/generate-image
+```
 
 ## Creating Custom Components
 

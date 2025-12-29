@@ -7,33 +7,58 @@ A monorepo project for generating and displaying full-color images on a 7.3" E-I
 ```
 Eink/
 ├── packages/
+│   ├── service/             # API service for PTV data collection
 │   ├── image-generator/     # Node.js/TypeScript React-to-Image application
 │   └── firmware/            # PlatformIO firmware for XIAO ESP32-S3
+├── docker-compose.yml       # Docker orchestration
 ├── README.md
 └── package.json
 ```
 
 ## Components
 
-### 1. Image Generator (Node.js/TypeScript)
+### 1. Service (Node.js/TypeScript)
 
-A React-based application that generates 5:3 aspect ratio images and saves them to a local network file store.
+API service that collects public transport data from PTV API and triggers image generation.
+
+**Features:**
+- Scheduled cron jobs for data collection
+- PostgreSQL database storage
+- RESTful API endpoints
+- Route service status tracking
+- Triggers image generation
+
+**Technology Stack:**
+- Node.js 22
+- TypeScript
+- Express
+- PostgreSQL
+- node-cron
+
+[View Service Documentation](./packages/service/README.md)
+
+### 2. Image Generator (React/TypeScript)
+
+A React-based application that displays PTV transit data in 5:3 aspect ratio layouts optimized for E-Ink displays.
 
 **Features:**
 - TypeScript for type safety
 - React components for UI design
 - Live preview server for development
-- React-to-image conversion
-- Network file storage integration
+- Displays real-time transit data from database
+- Multiple display components (metro, etc.)
 
 **Technology Stack:**
-- Node.js
-- TypeScript
 - React
+- TypeScript
 - Vite (for development server)
-- html-to-image or puppeteer (for image generation)
+- Chakra UI (for styling)
 
-### 2. Firmware (PlatformIO/C++)
+**Note:** This is just the React app. Image generation (screenshotting) is handled by the service package using Puppeteer.
+
+[View Image Generator Documentation](./packages/image-generator/README.md)
+
+### 3. Firmware (PlatformIO/C++)
 
 Firmware for the XIAO ESP32-S3 Plus that downloads images and updates the 7.3" E-Ink Spectra 6 display.
 
@@ -52,47 +77,52 @@ Firmware for the XIAO ESP32-S3 Plus that downloads images and updates the 7.3" E
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
+- Node.js 22+
 - npm or yarn
+- PostgreSQL (or use Docker)
+- PTV API credentials
 - PlatformIO Core or PlatformIO IDE (VS Code extension)
 - XIAO ESP32-S3 Plus board
 - 7.3" E-Ink Spectra 6 display
 
-### Installation
+### Quick Start with Docker
 
-1. Clone the repository:
+1. Configure environment:
 ```bash
-cd Eink
+cp .env.example .env
+# Edit .env with your PTV API credentials
 ```
 
-2. Install image generator dependencies:
+2. Start all services:
 ```bash
-cd packages/image-generator
+docker-compose up -d
+```
+
+This starts PostgreSQL, the service, and image generator.
+
+### Local Development
+
+#### 1. Service
+
+```bash
+cd packages/service
+cp .env.example .env
+# Edit .env with your credentials
 npm install
-```
-
-3. Set up the firmware project:
-```bash
-cd packages/firmware
-pio lib install
-```
-
-### Development
-
-#### Image Generator
-
-Run the development server to preview components:
-```bash
-cd packages/image-generator
 npm run dev
 ```
 
-Generate images:
+#### 2. Image Generator (React App)
+
 ```bash
-npm run generate
+cd packages/image-generator
+cp .env.example .env
+# Edit .env with your PTV credentials and DB settings
+npm install
+npm run dev
 ```
 
-#### Firmware
+#### 3. Firmware
 
 Build and upload to the XIAO ESP32-S3:
 ```bash
@@ -105,16 +135,48 @@ Monitor serial output:
 pio device monitor
 ```
 
+## API Endpoints
+
+### Service (port 3001)
+- `GET /health` - Health check
+- `POST /collect-data` - Manually trigger PTV data collection
+- `POST /generate-image` - Manually trigger image generation
+
+### Image Generator (port 3000)
+- React app - No API endpoints, just displays the UI
+
 ## Configuration
+
+### Service
+
+Configure PTV API, database, and file store in `packages/service/.env`:
+```env
+PTV_DEV_ID=your_dev_id
+PTV_API_KEY=your_api_key
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=eink
+DB_USER=postgres
+DB_PASSWORD=your_password
+
+# Optional: Upload images to file store
+FILE_STORE_URL=//192.168.1.100/shared/eink
+```
 
 ### Image Generator
 
-Configure the network file store path and display dimensions in `packages/image-generator/.env`:
+Configure PTV API and database in `packages/image-generator/.env`:
+```env
+PTV_DEV_ID=your_dev_id
+PTV_API_KEY=your_api_key
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=eink
+DB_USER=postgres
+DB_PASSWORD=your_password
 ```
-DISPLAY_WIDTH=800
-DISPLAY_HEIGHT=480
-FILE_STORE_PATH=//network-path/images
-```
+
+**Note**: Image generation settings (dimensions, output path, component) are configured in the service package.
 
 ### Firmware
 
@@ -144,5 +206,6 @@ MIT
 ## Support
 
 For issues and questions, please refer to the individual package READMEs:
+- [Service Documentation](./packages/service/README.md)
 - [Image Generator Documentation](./packages/image-generator/README.md)
 - [Firmware Documentation](./packages/firmware/README.md)

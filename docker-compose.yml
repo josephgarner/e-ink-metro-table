@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: eink-postgres
+    environment:
+      POSTGRES_DB: eink
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Image Generator React App
+  image-generator:
+    build:
+      context: ./packages/image-generator
+      dockerfile: Dockerfile
+    container_name: eink-image-generator
+    ports:
+      - "3000:3000"
+    environment:
+      - PTV_API_BASE_URL=${PTV_API_BASE_URL:-https://timetableapi.ptv.vic.gov.au}
+      - PTV_DEV_ID=${PTV_DEV_ID}
+      - PTV_API_KEY=${PTV_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=eink
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+
+  # API Service
+  service:
+    build:
+      context: ./packages/service
+      dockerfile: Dockerfile
+    container_name: eink-service
+    ports:
+      - "3001:3001"
+    environment:
+      - PTV_API_BASE_URL=${PTV_API_BASE_URL:-https://timetableapi.ptv.vic.gov.au}
+      - PTV_DEV_ID=${PTV_DEV_ID}
+      - PTV_API_KEY=${PTV_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=eink
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - PORT=3001
+      - DATA_COLLECTION_CRON=${DATA_COLLECTION_CRON:-*/5 * * * *}
+      - IMAGE_GENERATION_CRON=${IMAGE_GENERATION_CRON:-*/10 * * * *}
+      - IMAGE_GENERATOR_APP_URL=http://image-generator:3000
+      - IMAGE_OUTPUT_PATH=/app/output/display.png
+      - FILE_STORE_URL=${FILE_STORE_URL:-}
+      - DISPLAY_WIDTH=800
+      - DISPLAY_HEIGHT=480
+      - COMPONENT=metro
+    volumes:
+      - image-output:/app/output
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres-data:
+  image-output:

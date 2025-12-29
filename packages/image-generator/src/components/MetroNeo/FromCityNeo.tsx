@@ -4,6 +4,7 @@ import { differenceInMinutes } from 'date-fns'
 import { Box, HStack, VStack, Text, Icon } from '@chakra-ui/react'
 import { FaClock } from 'react-icons/fa'
 import { MdOutlineTrain } from 'react-icons/md'
+import StatusBox from './StatusBox'
 
 type Departures = {
   scheduled: string
@@ -124,20 +125,7 @@ export function TrainsFromCityNeo({ status }: FromCityProps) {
             </Box>
 
             {/* Status badge */}
-            <Box
-              bg={getStatusColor(time.disruption_ids)}
-              color="brutal.black"
-              display="flex"
-              p={2}
-              textAlign="center"
-              border="3px solid black"
-              borderRadius="0"
-              alignItems="center"
-            >
-              <Text fontSize="sm" fontWeight="bold" textTransform="uppercase">
-                {status}
-              </Text>
-            </Box>
+            <StatusBox status={status} />
 
             <Box display="flex" alignItems="center">
               <Text fontSize="md" fontWeight="black" textAlign="center" color="brutal.black">
