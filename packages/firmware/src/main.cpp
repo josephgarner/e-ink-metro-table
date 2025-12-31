@@ -1,18 +1,21 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <Fonts/FreeMonoBold9pt7b.h>
-#include <GxEPD2_7C.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
-#include <time.h>
 #include <esp_task_wdt.h>
+#include <time.h>
 
+// Seeed GFX Library (automatically includes EPaper extension)
+#include "TFT_eSPI.h"
+
+// Board and display configuration
 #include "config.h"
 
-// 7.3" E-Ink Spectra 6 (ACeP 7-color) Display
-// Using GxEPD2_730c_ACeP_730 for 7.3" ACeP display
-GxEPD2_7C<GxEPD2_730c_ACeP_730, GxEPD2_730c_ACeP_730::HEIGHT> display(
-    GxEPD2_730c_ACeP_730(EPD_CS_PIN, EPD_DC_PIN, EPD_RST_PIN, EPD_BUSY_PIN));
+// 7.3" E-Ink Spectra 6 (6-color) Display for EE04 Board
+// Using Seeed GFX library with BOARD_SCREEN_COMBO 509
+#ifdef EPAPER_ENABLE
+EPaper epaper;
+#endif
 
 // Function prototypes
 void setupWiFi();
@@ -25,6 +28,7 @@ void enterDeepSleep(uint32_t durationSeconds);
 void initDisplay();
 void setupButtonWakeup();
 int getWakeButtonPressed();
+void displayTestPattern();
 
 // Image buffer - stores downloaded image data
 uint8_t* imageBuffer = nullptr;
@@ -59,6 +63,15 @@ void setup() {
 
     // Initialize display
     initDisplay();
+
+    // Show test pattern on first boot to verify display works
+    if (wakeup_reason != ESP_SLEEP_WAKEUP_TIMER && wakeup_reason != ESP_SLEEP_WAKEUP_EXT1) {
+        Serial.println("\n*** FIRST BOOT DETECTED ***");
+        Serial.println("Displaying test pattern to verify display hardware...");
+        displayTestPattern();
+        Serial.println("Test pattern complete. Waiting 5 seconds...");
+        delay(5000);
+    }
 
     // Determine what to display based on wake source
     bool showMetro = false;
@@ -304,10 +317,20 @@ void downloadImage(const char* imageUrl) {
         Serial.println();
         Serial.print("Downloaded ");
         Serial.print(bytesRead);
-        Serial.println(" bytes");
+        Serial.print(" bytes (expected: ");
+        Serial.print(contentLength);
+        Serial.println(")");
+
+        if (bytesRead == contentLength) {
+            Serial.println("SUCCESS: All bytes downloaded");
+        } else {
+            Serial.println("WARNING: Downloaded bytes don't match expected size");
+        }
 
     } else {
-        Serial.print("HTTP GET failed, error: ");
+        Serial.print("HTTP GET failed, error code: ");
+        Serial.print(httpCode);
+        Serial.print(" - ");
         Serial.println(http.errorToString(httpCode).c_str());
     }
 
@@ -319,15 +342,16 @@ void downloadImage(const char* imageUrl) {
  */
 void initDisplay() {
     Serial.println("\n--- Initializing Display ---");
+    Serial.println("Using Seeed GFX library for XIAO EE04 board");
+    Serial.println("Display: 7.3\" six-color ePaper (ED2208)");
+    Serial.println("BOARD_SCREEN_COMBO: 509");
 
-    // Init display with serial diagnostics enabled
-    // Parameters: serial_diag_bitrate, initial (do reset), reset_duration (ms), pulldown_rst_mode
-    display.init(115200, true, 20, false);
-    display.setRotation(0);  // Portrait mode
-    display.setFullWindow();
+    // Initialize the Seeed ePaper display
+    // The library reads driver.h and Setup509 automatically
+    epaper.begin();
 
     Serial.println("Display initialized successfully");
-    Serial.println("NOTE: 6-color E-Ink display");
+    Serial.println("NOTE: 6-color E-Ink display ready");
 }
 
 /**
@@ -341,33 +365,46 @@ void updateDisplay() {
         return;
     }
 
+    Serial.print("Image buffer size: ");
+    Serial.print(imageBufferSize);
+    Serial.println(" bytes");
+
+    // Print first 16 bytes for debugging
+    Serial.print("First 16 bytes (hex): ");
+    for (int i = 0; i < min(16, (int)imageBufferSize); i++) {
+        if (imageBuffer[i] < 0x10) Serial.print("0");
+        Serial.print(imageBuffer[i], HEX);
+        Serial.print(" ");
+    }
+    Serial.println();
+
     // Check image format
     bool isPNG = (imageBufferSize > 8 && imageBuffer[0] == 0x89 && imageBuffer[1] == 'P' &&
                   imageBuffer[2] == 'N' && imageBuffer[3] == 'G');
     bool isBMP = (imageBufferSize > 54 && imageBuffer[0] == 'B' && imageBuffer[1] == 'M');
 
+    Serial.print("Format detection - PNG: ");
+    Serial.print(isPNG ? "YES" : "NO");
+    Serial.print(", BMP: ");
+    Serial.println(isBMP ? "YES" : "NO");
+
     if (isPNG) {
         Serial.println("Detected PNG image format");
-        Serial.println("ERROR: PNG format not supported for 7-color display");
+        Serial.println("ERROR: PNG format not supported for 6-color display");
         Serial.println("Please configure the server to generate BMP images");
         Serial.println("Update IMAGE_OUTPUT_PATH to use .bmp extension");
 
         // Display error message
-        display.setFullWindow();
-        display.firstPage();
-        do {
-            display.fillScreen(GxEPD_WHITE);
-            display.setFont(&FreeMonoBold9pt7b);
-            display.setTextColor(GxEPD_BLACK);
-            display.setCursor(50, 200);
-            display.print("ERROR: PNG not supported");
-            display.setCursor(50, 230);
-            display.print("Server must generate BMP");
-            display.setCursor(50, 260);
-            display.print("Check image-generator config");
-        } while (display.nextPage());
-
-        display.hibernate();
+        epaper.fillScreen(TFT_WHITE);
+        epaper.setTextSize(2);
+        epaper.setTextColor(TFT_BLACK);
+        epaper.setCursor(50, 200);
+        epaper.print("ERROR: PNG not supported");
+        epaper.setCursor(50, 230);
+        epaper.print("Server must generate BMP");
+        epaper.setCursor(50, 260);
+        epaper.print("Check image-generator config");
+        epaper.update();
 
         // Free image buffer
         if (imageBuffer != nullptr) {
@@ -380,7 +417,7 @@ void updateDisplay() {
 
     if (!isBMP) {
         Serial.println("ERROR: Unknown image format");
-        Serial.println("Expected BMP format for 7-color display");
+        Serial.println("Expected BMP format for 6-color display");
 
         // Free image buffer
         if (imageBuffer != nullptr) {
@@ -392,26 +429,41 @@ void updateDisplay() {
     }
 
     Serial.println("Detected BMP image format - proceeding with display update");
-    Serial.println("NOTE: Using fast refresh mode (~30 seconds)");
+    Serial.println("NOTE: Display refresh may take 30+ seconds");
     Serial.println("Device will appear unresponsive during refresh - this is normal");
 
     Serial.println("Starting display refresh...");
+
+    // BMP files need to be decoded before displaying
+    // For now, we'll test with a simple approach
+    // TODO: Implement proper BMP decoder or convert images to uint16_t arrays
+
+    Serial.println("NOTE: BMP decoding not yet implemented");
+    Serial.println("For testing, displaying a color pattern instead...");
+
     unsigned long startTime = millis();
 
-    // Use writeImage for native BMP support on 7-color display
-    // This method handles the image decoding internally
-    display.setFullWindow();
-    display.writeImage(imageBuffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, false, false, true);
+    // Temporary: Display a test pattern until BMP decoder is implemented
+    epaper.fillScreen(TFT_WHITE);
+    epaper.setTextSize(3);
+    epaper.setTextColor(TFT_BLACK);
+    epaper.setCursor(100, 220);
+    epaper.print("BMP Image Downloaded");
+    epaper.setCursor(100, 260);
+    epaper.print("Size: ");
+    epaper.print(imageBufferSize / 1024);
+    epaper.print(" KB");
+
+    // Refresh the display to show the message
+    Serial.println("Calling epaper.update() to refresh...");
+    epaper.update();
 
     unsigned long endTime = millis();
     Serial.print("Display refresh completed in ");
     Serial.print((endTime - startTime) / 1000);
     Serial.println(" seconds");
 
-    // Put display to sleep to save power
-    display.hibernate();
-
-    Serial.println("Display update complete");
+    Serial.println("Display update complete!");
 
     // Free image buffer
     if (imageBuffer != nullptr) {
@@ -493,6 +545,53 @@ int getWakeButtonPressed() {
         Serial.println("Wake-up not caused by deep sleep (first boot or reset)");
         return 0;
     }
+}
+
+/**
+ * Display a test pattern to verify display is working
+ */
+void displayTestPattern() {
+    Serial.println("\n--- Displaying Test Pattern ---");
+    Serial.println("This will show colored rectangles to verify display hardware");
+
+    unsigned long startTime = millis();
+
+    // Clear display to white
+    epaper.fillScreen(TFT_WHITE);
+
+    // Draw colored rectangles (6 colors of Spectra 6)
+    // Top row - color blocks
+    epaper.fillRect(0, 0, 133, 160, TFT_BLACK);
+    epaper.fillRect(133, 0, 133, 160, TFT_WHITE);
+    epaper.fillRect(266, 0, 134, 160, TFT_RED);
+    epaper.fillRect(400, 0, 133, 160, TFT_YELLOW);
+    epaper.fillRect(533, 0, 133, 160, TFT_BLUE);
+    epaper.fillRect(666, 0, 134, 160, TFT_GREEN);
+
+    // Bottom - text
+    epaper.setTextSize(2);
+    epaper.setTextColor(TFT_BLACK);
+    epaper.setCursor(50, 240);
+    epaper.print("E-Ink Display Test");
+    epaper.setCursor(50, 270);
+    epaper.print("6 Colors: B W R Y B G");
+    epaper.setCursor(50, 300);
+    epaper.print("If you see colors,");
+    epaper.setCursor(50, 330);
+    epaper.print("display is working!");
+
+    // Refresh the display
+    Serial.println("Calling epaper.update() to refresh...");
+    epaper.update();
+
+    unsigned long endTime = millis();
+    Serial.print("Test pattern refresh completed in ");
+    Serial.print((endTime - startTime) / 1000);
+    Serial.println(" seconds");
+
+    Serial.println("Test pattern sent to display");
+    Serial.println("NOTE: Display refresh may take 30+ seconds");
+    Serial.println("Watch the display for color changes...");
 }
 
 /**

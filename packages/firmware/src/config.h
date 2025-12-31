@@ -4,14 +4,14 @@
 // ========================================
 // WiFi Configuration
 // ========================================
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
+#define WIFI_SSID "OrbiWifiMesh"
+#define WIFI_PASSWORD "97e977fb"
 
 // ========================================
 // Server Configuration
 // ========================================
 // Service API endpoint to trigger image generation
-#define SERVICE_API_URL "http://192.168.1.100:3001/generate-image"
+#define SERVICE_API_URL "http://192.168.1.34:3001/generate-image"
 
 // Image URLs (must be BMP format for 7-color E-Ink display)
 #define METRO_IMAGE_URL "https://storage.hermes-lab.com/dev/eink/metroTable/display.bmp"
@@ -73,10 +73,10 @@
 // Button Configuration
 // ========================================
 // Buttons for manual wake and control
-// XIAO ePaper Display Board has multiple buttons
-#define METRO_BUTTON_PIN 1        // Key 1: Force metro data update
-#define SCREENSAVER_BUTTON_PIN 2  // Key 2: Display screensaver
-#define BUTTON_ACTIVE_LOW true    // Set to true if buttons connect to GND when pressed
+// XIAO ePaper Display Board EE04 button mapping (from Seeed Wiki)
+#define METRO_BUTTON_PIN 2        // KEY1 = GPIO2 (D1/A1): Force metro data update
+#define SCREENSAVER_BUTTON_PIN 3  // KEY2 = GPIO3 (D2/A2): Display screensaver
+#define BUTTON_ACTIVE_LOW true    // Buttons are active-low (LOW when pressed)
 
 // ========================================
 // Debug Configuration
