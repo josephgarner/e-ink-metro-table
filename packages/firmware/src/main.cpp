@@ -438,7 +438,21 @@ void updateDisplay() {
     // Read BMP header info
     uint32_t pixelDataOffset = imageBuffer[10] | (imageBuffer[11] << 8) | (imageBuffer[12] << 16) | (imageBuffer[13] << 24);
     uint32_t width = imageBuffer[18] | (imageBuffer[19] << 8) | (imageBuffer[20] << 16) | (imageBuffer[21] << 24);
-    uint32_t height = imageBuffer[22] | (imageBuffer[23] << 8) | (imageBuffer[24] << 16) | (imageBuffer[25] << 24);
+
+    // Height can be negative in BMP (indicates top-down pixel order)
+    int32_t heightSigned = (int32_t)(imageBuffer[22] | (imageBuffer[23] << 8) | (imageBuffer[24] << 16) | (imageBuffer[25] << 24));
+    bool topDown = false;
+    uint32_t height;
+
+    if (heightSigned < 0) {
+        topDown = true;
+        height = -heightSigned;
+        Serial.println("BMP is stored top-down");
+    } else {
+        height = heightSigned;
+        Serial.println("BMP is stored bottom-up");
+    }
+
     uint16_t bitsPerPixel = imageBuffer[28] | (imageBuffer[29] << 8);
 
     Serial.print("BMP Info - Width: ");
@@ -449,17 +463,10 @@ void updateDisplay() {
     Serial.println(bitsPerPixel);
 
     // Validate BMP dimensions
-    if (width != DISPLAY_WIDTH || height != DISPLAY_HEIGHT) {
-        Serial.print("WARNING: BMP dimensions (");
-        Serial.print(width);
-        Serial.print("x");
-        Serial.print(height);
-        Serial.print(") don't match display (");
-        Serial.print(DISPLAY_WIDTH);
-        Serial.print("x");
-        Serial.print(DISPLAY_HEIGHT);
-        Serial.println(")");
-    }
+    Serial.print("BMP dimensions: ");
+    Serial.print(width);
+    Serial.print("x");
+    Serial.println(height);
 
     // Only support 24-bit BMP
     if (bitsPerPixel != 24) {
@@ -478,12 +485,60 @@ void updateDisplay() {
     // BMP rows are padded to 4-byte boundaries
     uint32_t rowSize = ((width * 3 + 3) / 4) * 4;
 
-    Serial.println("Decoding BMP and drawing to display buffer...");
+    Serial.println("Decoding BMP with Floyd-Steinberg dithering for smoother gradients...");
 
-    // BMP pixels are stored bottom-to-top, so we read from bottom row first
+    // Dithering: Create error diffusion buffers for Floyd-Steinberg dithering
+    // We need 2 rows for error propagation
+    int16_t* errorR = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+    int16_t* errorG = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+    int16_t* errorB = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+    int16_t* nextErrorR = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+    int16_t* nextErrorG = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+    int16_t* nextErrorB = (int16_t*)malloc(sizeof(int16_t) * (width + 2));
+
+    if (!errorR || !errorG || !errorB || !nextErrorR || !nextErrorG || !nextErrorB) {
+        Serial.println("ERROR: Failed to allocate dithering buffers");
+        if (errorR) free(errorR);
+        if (errorG) free(errorG);
+        if (errorB) free(errorB);
+        if (nextErrorR) free(nextErrorR);
+        if (nextErrorG) free(nextErrorG);
+        if (nextErrorB) free(nextErrorB);
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        imageBufferSize = 0;
+        return;
+    }
+
+    // Initialize error buffers
+    memset(errorR, 0, sizeof(int16_t) * (width + 2));
+    memset(errorG, 0, sizeof(int16_t) * (width + 2));
+    memset(errorB, 0, sizeof(int16_t) * (width + 2));
+    memset(nextErrorR, 0, sizeof(int16_t) * (width + 2));
+    memset(nextErrorG, 0, sizeof(int16_t) * (width + 2));
+    memset(nextErrorB, 0, sizeof(int16_t) * (width + 2));
+
+    // BMP pixels can be stored bottom-to-top or top-to-bottom
     // Rotate 90 degrees clockwise: BMP(x,y) -> Display(height-1-y, x)
     for (int32_t y = 0; y < (int32_t)height; y++) {
-        uint32_t rowOffset = pixelDataOffset + (height - 1 - y) * rowSize;
+        // Calculate row offset based on whether BMP is top-down or bottom-up
+        uint32_t rowOffset;
+        if (topDown) {
+            // Top-down: first row in file is y=0 (top of image)
+            rowOffset = pixelDataOffset + y * rowSize;
+        } else {
+            // Bottom-up (standard): first row in file is y=height-1 (bottom of image)
+            rowOffset = pixelDataOffset + (height - 1 - y) * rowSize;
+        }
+
+        // Swap error buffers for next row
+        int16_t* temp;
+        temp = errorR; errorR = nextErrorR; nextErrorR = temp;
+        temp = errorG; errorG = nextErrorG; nextErrorG = temp;
+        temp = errorB; errorB = nextErrorB; nextErrorB = temp;
+        memset(nextErrorR, 0, sizeof(int16_t) * (width + 2));
+        memset(nextErrorG, 0, sizeof(int16_t) * (width + 2));
+        memset(nextErrorB, 0, sizeof(int16_t) * (width + 2));
 
         for (int32_t x = 0; x < (int32_t)width; x++) {
             uint32_t pixelOffset = rowOffset + x * 3;
@@ -497,35 +552,89 @@ void updateDisplay() {
             uint8_t g = imageBuffer[pixelOffset + 1];
             uint8_t r = imageBuffer[pixelOffset + 2];
 
-            // Map RGB to 6 colors (simple nearest-color algorithm)
-            uint16_t color = TFT_WHITE; // Default to white
+            // Apply error diffusion from previous pixels
+            int16_t newR = constrain((int16_t)r + errorR[x + 1], 0, 255);
+            int16_t newG = constrain((int16_t)g + errorG[x + 1], 0, 255);
+            int16_t newB = constrain((int16_t)b + errorB[x + 1], 0, 255);
 
-            // Determine dominant color component
-            uint8_t maxVal = max(r, max(g, b));
-            uint8_t minVal = min(r, min(g, b));
+            // Map to nearest 6-color palette
+            uint16_t color;
+            uint8_t targetR, targetG, targetB;
 
-            if (maxVal < 64) {
-                color = TFT_BLACK; // Dark colors -> black
-            } else if (minVal > 192 && maxVal > 192) {
-                color = TFT_WHITE; // Light colors -> white
-            } else if (r > g && r > b) {
-                if (g > 100) {
-                    color = TFT_YELLOW; // Red + green -> yellow
+            // Enhanced color mapping with better thresholds
+            uint8_t maxVal = max(newR, max(newG, newB));
+            uint8_t minVal = min(newR, min(newG, newB));
+
+            if (maxVal < 85) {
+                // Black
+                color = TFT_BLACK;
+                targetR = targetG = targetB = 0;
+            } else if (minVal > 170) {
+                // White
+                color = TFT_WHITE;
+                targetR = targetG = targetB = 255;
+            } else if (newR > newG + 50 && newR > newB + 50) {
+                if (newG > 120 && newB < 100) {
+                    // Yellow (red + green)
+                    color = TFT_YELLOW;
+                    targetR = 255; targetG = 255; targetB = 0;
                 } else {
-                    color = TFT_RED; // Mostly red
+                    // Red
+                    color = TFT_RED;
+                    targetR = 255; targetG = 0; targetB = 0;
                 }
-            } else if (g > r && g > b) {
-                color = TFT_GREEN; // Mostly green
-            } else if (b > r && b > g) {
-                color = TFT_BLUE; // Mostly blue
-            } else if (r > 150 && g > 150) {
-                color = TFT_YELLOW; // Yellow region
+            } else if (newG > newR + 50 && newG > newB + 50) {
+                // Green
+                color = TFT_GREEN;
+                targetR = 0; targetG = 255; targetB = 0;
+            } else if (newB > newR + 50 && newB > newG + 50) {
+                // Blue
+                color = TFT_BLUE;
+                targetR = 0; targetG = 0; targetB = 255;
+            } else if (newR > 150 && newG > 150 && newB < 100) {
+                // Yellow
+                color = TFT_YELLOW;
+                targetR = 255; targetG = 255; targetB = 0;
+            } else if (newR + newG + newB > 384) {
+                // Bright -> White
+                color = TFT_WHITE;
+                targetR = targetG = targetB = 255;
+            } else {
+                // Dark -> Black
+                color = TFT_BLACK;
+                targetR = targetG = targetB = 0;
             }
 
-            // Rotate 90 degrees clockwise when drawing
+            // Calculate error (Floyd-Steinberg dithering)
+            int16_t errR = newR - targetR;
+            int16_t errG = newG - targetG;
+            int16_t errB = newB - targetB;
+
+            // Distribute error to neighboring pixels:
+            //     X   7/16
+            // 3/16 5/16 1/16
+            errorR[x + 2] += (errR * 7) >> 4;  // Right
+            nextErrorR[x] += (errR * 3) >> 4;  // Bottom-left
+            nextErrorR[x + 1] += (errR * 5) >> 4;  // Bottom
+            nextErrorR[x + 2] += errR >> 4;  // Bottom-right
+
+            errorG[x + 2] += (errG * 7) >> 4;
+            nextErrorG[x] += (errG * 3) >> 4;
+            nextErrorG[x + 1] += (errG * 5) >> 4;
+            nextErrorG[x + 2] += errG >> 4;
+
+            errorB[x + 2] += (errB * 7) >> 4;
+            nextErrorB[x] += (errB * 3) >> 4;
+            nextErrorB[x + 1] += (errB * 5) >> 4;
+            nextErrorB[x + 2] += errB >> 4;
+
+            // Rotate 90 degrees clockwise when drawing: BMP(x,y) -> Display(height-1-y, x)
             int32_t displayX = height - 1 - y;
             int32_t displayY = x;
-            epaper.drawPixel(displayX, displayY, color);
+
+            if (displayX >= 0 && displayX < DISPLAY_WIDTH && displayY >= 0 && displayY < DISPLAY_HEIGHT) {
+                epaper.drawPixel(displayX, displayY, color);
+            }
         }
 
         // Print progress every 50 rows
@@ -536,6 +645,14 @@ void updateDisplay() {
             Serial.println(height);
         }
     }
+
+    // Free dithering buffers
+    free(errorR);
+    free(errorG);
+    free(errorB);
+    free(nextErrorR);
+    free(nextErrorG);
+    free(nextErrorB);
 
     Serial.println("BMP decoded, calling epaper.update() to refresh display...");
     epaper.update();
