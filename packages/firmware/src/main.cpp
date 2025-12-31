@@ -64,15 +64,6 @@ void setup() {
     // Initialize display
     initDisplay();
 
-    // Show test pattern on first boot to verify display works
-    if (wakeup_reason != ESP_SLEEP_WAKEUP_TIMER && wakeup_reason != ESP_SLEEP_WAKEUP_EXT1) {
-        Serial.println("\n*** FIRST BOOT DETECTED ***");
-        Serial.println("Displaying test pattern to verify display hardware...");
-        displayTestPattern();
-        Serial.println("Test pattern complete. Waiting 5 seconds...");
-        delay(5000);
-    }
-
     // Determine what to display based on wake source
     bool showMetro = false;
     uint32_t sleepDuration = INACTIVE_PERIOD_SLEEP_SECONDS;
@@ -433,29 +424,120 @@ void updateDisplay() {
     Serial.println("Device will appear unresponsive during refresh - this is normal");
 
     Serial.println("Starting display refresh...");
-
-    // BMP files need to be decoded before displaying
-    // For now, we'll test with a simple approach
-    // TODO: Implement proper BMP decoder or convert images to uint16_t arrays
-
-    Serial.println("NOTE: BMP decoding not yet implemented");
-    Serial.println("For testing, displaying a color pattern instead...");
-
     unsigned long startTime = millis();
 
-    // Temporary: Display a test pattern until BMP decoder is implemented
-    epaper.fillScreen(TFT_WHITE);
-    epaper.setTextSize(3);
-    epaper.setTextColor(TFT_BLACK);
-    epaper.setCursor(100, 220);
-    epaper.print("BMP Image Downloaded");
-    epaper.setCursor(100, 260);
-    epaper.print("Size: ");
-    epaper.print(imageBufferSize / 1024);
-    epaper.print(" KB");
+    // Parse BMP header
+    if (imageBufferSize < 54) {
+        Serial.println("ERROR: BMP file too small (header incomplete)");
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        imageBufferSize = 0;
+        return;
+    }
 
-    // Refresh the display to show the message
-    Serial.println("Calling epaper.update() to refresh...");
+    // Read BMP header info
+    uint32_t pixelDataOffset = imageBuffer[10] | (imageBuffer[11] << 8) | (imageBuffer[12] << 16) | (imageBuffer[13] << 24);
+    uint32_t width = imageBuffer[18] | (imageBuffer[19] << 8) | (imageBuffer[20] << 16) | (imageBuffer[21] << 24);
+    uint32_t height = imageBuffer[22] | (imageBuffer[23] << 8) | (imageBuffer[24] << 16) | (imageBuffer[25] << 24);
+    uint16_t bitsPerPixel = imageBuffer[28] | (imageBuffer[29] << 8);
+
+    Serial.print("BMP Info - Width: ");
+    Serial.print(width);
+    Serial.print(", Height: ");
+    Serial.print(height);
+    Serial.print(", BPP: ");
+    Serial.println(bitsPerPixel);
+
+    // Validate BMP dimensions
+    if (width != DISPLAY_WIDTH || height != DISPLAY_HEIGHT) {
+        Serial.print("WARNING: BMP dimensions (");
+        Serial.print(width);
+        Serial.print("x");
+        Serial.print(height);
+        Serial.print(") don't match display (");
+        Serial.print(DISPLAY_WIDTH);
+        Serial.print("x");
+        Serial.print(DISPLAY_HEIGHT);
+        Serial.println(")");
+    }
+
+    // Only support 24-bit BMP
+    if (bitsPerPixel != 24) {
+        Serial.print("ERROR: Only 24-bit BMP supported, got ");
+        Serial.print(bitsPerPixel);
+        Serial.println(" bits per pixel");
+        free(imageBuffer);
+        imageBuffer = nullptr;
+        imageBufferSize = 0;
+        return;
+    }
+
+    // Clear the display
+    epaper.fillScreen(TFT_WHITE);
+
+    // BMP rows are padded to 4-byte boundaries
+    uint32_t rowSize = ((width * 3 + 3) / 4) * 4;
+
+    Serial.println("Decoding BMP and drawing to display buffer...");
+
+    // BMP pixels are stored bottom-to-top, so we read from bottom row first
+    // Rotate 90 degrees clockwise: BMP(x,y) -> Display(height-1-y, x)
+    for (int32_t y = 0; y < (int32_t)height; y++) {
+        uint32_t rowOffset = pixelDataOffset + (height - 1 - y) * rowSize;
+
+        for (int32_t x = 0; x < (int32_t)width; x++) {
+            uint32_t pixelOffset = rowOffset + x * 3;
+
+            if (pixelOffset + 2 >= imageBufferSize) {
+                continue; // Skip if out of bounds
+            }
+
+            // BMP stores as BGR
+            uint8_t b = imageBuffer[pixelOffset];
+            uint8_t g = imageBuffer[pixelOffset + 1];
+            uint8_t r = imageBuffer[pixelOffset + 2];
+
+            // Map RGB to 6 colors (simple nearest-color algorithm)
+            uint16_t color = TFT_WHITE; // Default to white
+
+            // Determine dominant color component
+            uint8_t maxVal = max(r, max(g, b));
+            uint8_t minVal = min(r, min(g, b));
+
+            if (maxVal < 64) {
+                color = TFT_BLACK; // Dark colors -> black
+            } else if (minVal > 192 && maxVal > 192) {
+                color = TFT_WHITE; // Light colors -> white
+            } else if (r > g && r > b) {
+                if (g > 100) {
+                    color = TFT_YELLOW; // Red + green -> yellow
+                } else {
+                    color = TFT_RED; // Mostly red
+                }
+            } else if (g > r && g > b) {
+                color = TFT_GREEN; // Mostly green
+            } else if (b > r && b > g) {
+                color = TFT_BLUE; // Mostly blue
+            } else if (r > 150 && g > 150) {
+                color = TFT_YELLOW; // Yellow region
+            }
+
+            // Rotate 90 degrees clockwise when drawing
+            int32_t displayX = height - 1 - y;
+            int32_t displayY = x;
+            epaper.drawPixel(displayX, displayY, color);
+        }
+
+        // Print progress every 50 rows
+        if (y % 50 == 0) {
+            Serial.print("Processing row ");
+            Serial.print(y);
+            Serial.print(" of ");
+            Serial.println(height);
+        }
+    }
+
+    Serial.println("BMP decoded, calling epaper.update() to refresh display...");
     epaper.update();
 
     unsigned long endTime = millis();
