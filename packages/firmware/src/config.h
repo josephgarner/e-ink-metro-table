@@ -4,8 +4,8 @@
 // ========================================
 // WiFi Configuration
 // ========================================
-#define WIFI_SSID "OrbiWifiMesh"
-#define WIFI_PASSWORD "97e977fb"
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 
 // ========================================
 // Server Configuration
